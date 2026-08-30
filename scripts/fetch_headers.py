@@ -35,6 +35,12 @@ SDK_REPO = "LX050724/HFLink_SDK"
 ASSET_PATTERN = re.compile(r"HFLinkSDK.*\.zip$", re.IGNORECASE)
 TAG_PATTERN = re.compile(r"[A-Za-z0-9._-]+")
 TRUSTED_HOSTS = {"api.github.com", "github.com"}
+DOWNLOAD_HOSTS = {
+    "api.github.com",
+    "github.com",
+    "release-assets.githubusercontent.com",
+    "objects.githubusercontent.com",
+}
 
 _TOKEN = None
 
@@ -95,8 +101,22 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def fetch_from_release(tag):
-    """从 SDK release 的开发包 zip 提取头文件；返回版本标识（tag）。"""
+def open_download(location):
+    """下载 302 预签名地址（不带认证头）；仅允许 https + GitHub 下载域。"""
+    parts = urllib.parse.urlparse(location)
+    if parts.scheme != "https" or parts.hostname not in DOWNLOAD_HOSTS:
+        print(f"错误：拒绝请求非受信下载地址：{location}", file=sys.stderr)
+        sys.exit(1)
+    return urllib.request.urlopen(location, timeout=300)
+
+
+def fetch_from_release(tag, save_asset_path=None, release_info_path=None):
+    """从 SDK release 的开发包 zip 提取头文件；返回版本标识（tag）。
+
+    save_asset_path 非空时将下载的开发包 zip 原样保存到该路径（供发布联动附带）。
+    release_info_path 非空时将 release 元信息（tag/name/body）写为 JSON，供代发
+    release 时复用 SDK 的描述。
+    """
     if not TAG_PATTERN.fullmatch(tag):
         print(f"错误：非法 tag：{tag}", file=sys.stderr)
         sys.exit(1)
@@ -133,12 +153,12 @@ def fetch_from_release(tag):
     asset_url = f"https://api.github.com/repos/{SDK_REPO}/releases/assets/{asset['id']}"
     response, location = open_url(asset_url, accept="application/octet-stream")
     if response is None and location:
-        parts = urllib.parse.urlparse(location)
-        if parts.scheme != "https":
-            print("错误：下载重定向地址非 https，已中止", file=sys.stderr)
-            sys.exit(1)
-        response = urllib.request.urlopen(location, timeout=300)
-    archive = zipfile.ZipFile(io.BytesIO(response.read()))
+        response = open_download(location)
+    asset_bytes = response.read()
+    if save_asset_path:
+        Path(save_asset_path).write_bytes(asset_bytes)
+        print(f"[docs] SDK 开发包已保存：{save_asset_path}")
+    archive = zipfile.ZipFile(io.BytesIO(asset_bytes))
     extracted = 0
     for name in archive.namelist():
         parts = name.split("/")
@@ -148,6 +168,16 @@ def fetch_from_release(tag):
     if not extracted:
         print("错误：开发包内未找到 include 目录或头文件，包结构已变更", file=sys.stderr)
         sys.exit(1)
+    if release_info_path:
+        info = {
+            "tag": release.get("tag_name", tag),
+            "name": release.get("name") or release.get("tag_name", tag),
+            "body": release.get("body") or "",
+        }
+        Path(release_info_path).write_text(
+            json.dumps(info, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n"
+        )
+        print(f"[docs] release 元信息已保存：{release_info_path}")
     version = tag
     for name in archive.namelist():
         if name.endswith("VERSION.txt"):
@@ -182,12 +212,17 @@ def main():
     group.add_argument("--release", metavar="TAG",
                        help="从 HFLink_SDK release 获取（tag 名或 latest）")
     group.add_argument("--sdk", metavar="PATH", help="从本地 HFLinkSDK 仓库获取")
+    parser.add_argument("--save-asset", metavar="PATH",
+                        help="--release 模式下将下载的 SDK 开发包 zip 另存到该路径")
+    parser.add_argument("--save-release-info", metavar="PATH",
+                        help="--release 模式下将 release 元信息（tag/name/body）写为 JSON")
     args = parser.parse_args()
 
     HEADERS_DIR.mkdir(parents=True, exist_ok=True)
     synced_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     if args.release:
-        version = fetch_from_release(args.release)
+        version = fetch_from_release(args.release, save_asset_path=args.save_asset,
+                                     release_info_path=args.save_release_info)
         source = f"sdk_tag: {version}"
     else:
         version = fetch_from_local(args.sdk)

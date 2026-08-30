@@ -27,11 +27,16 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Fetch SDK headers from release
-        run: python scripts/fetch_headers.py --release "$SDK_TAG"
+        run: python scripts/fetch_headers.py --release "$SDK_TAG" --save-asset "HFLinkSDK-${SDK_TAG}.zip" --save-release-info sdk-release.json
         env:
           SDK_TAG: ${{ github.event.client_payload.sdk_tag }}
           # HFLink_SDK 为私有仓库：需要对该仓库有 contents:read 的 PAT
           HF_LINK_SDK_TOKEN: ${{ secrets.DOCS_PAT }}
+
+      - name: Export SDK release info
+        run: |
+          echo "SDK_RELEASE_NAME=$(jq -r '.name' sdk-release.json)" >> "$GITHUB_ENV"
+          jq -r '.body' sdk-release.json > sdk-release-body.md
 
       - name: Tag this build
         run: git tag "$SDK_TAG"
@@ -58,6 +63,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.client_payload.sdk_tag }}
-          name: "文档 ${{ github.event.client_payload.sdk_tag }}"
-          body: "对应 HFLink_SDK ${{ github.event.client_payload.sdk_tag }} 的 API 文档与离线站点。"
-          files: HFLinkSDK-docs-*.zip
+          name: "${{ env.SDK_RELEASE_NAME }}"
+          body_path: sdk-release-body.md
+          files: |
+            HFLinkSDK-docs-*.zip
+            HFLinkSDK-*.zip
