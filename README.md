@@ -4,7 +4,7 @@ HFLinkSDK（基于 CMSIS-DAP 协议的调试器驱动 SDK）的官方文档源�
 
 - API 参考由 **Doxygen + Breathe** 从 `sdk-headers/` 快照中的公开头文件自动抽取（含中文 Doxygen 注释）
 - CLI / Lua 脚本使用手册为手写 MyST Markdown
-- 头文件快照来自 [HFLinkSDK](https://github.com/your-org/HFLinkSDK) 仓库，`sdk-headers/SYNC_INFO` 记录快照对应的 SDK commit
+- 头文件快照来自 [HFLinkSDK](https://github.com/LX050724/HFLink_SDK) 仓库，`sdk-headers/SYNC_INFO` 记录快照对应的 SDK commit
 
 ## 本地构建
 
