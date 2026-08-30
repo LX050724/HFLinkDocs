@@ -40,5 +40,6 @@ python scripts/build_docs.py
 
 ## 发布
 
-- **Read the Docs**：将本仓库导入 [readthedocs.org](https://readthedocs.org)，每个 git tag 自动构建一个版本站点（配置见 `.readthedocs.yaml`）。
+- **GitHub Pages**：仓库 Settings → Pages → Source 选 **GitHub Actions** 后，每次推送 master/main 自动部署最新文档站（配置见 `.github/workflows/pages.yml`），地址 `https://<用户名>.github.io/<仓库名>/`。
+- **Read the Docs**：将本仓库导入 [readthedocs.org](https://readthedocs.org)，每个 git tag 自动构建一个版本站点（配置见 `.readthedocs.yaml`）；Pages 展示最新版，历史版本由 RTD 提供。
 - **GitHub Release**：推送 `v*` tag 时，GitHub Actions 自动构建离线 HTML 并作为附件上传（配置见 `.github/workflows/release.yml`）。
