@@ -6,6 +6,10 @@
   （HFLinkSDK-<tag>-win64.zip），解出 include/*.h 与 VERSION.txt
 - --sdk <本地路径>：从本地 HFLinkSDK 仓库的 Driver/include 复制（本地开发调试用）
 
+认证：HFLink_SDK 为私有仓库时必须提供 token——优先环境变量 HF_LINK_SDK_TOKEN，
+否则自动从本机 git credential（github.com）获取；release 资产走 API octet-stream
+端点下载，token 不会跟随重定向泄漏到外部域。
+
 SYNC_INFO 记录来源（release tag 或源 commit），conf.py 读取后展示在页脚。
 
 安全约束：仅允许向 https + GitHub 固定域名发起请求，tag 参数做字符白名单校验，
@@ -19,6 +23,7 @@ import json
 import re
 import subprocess
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -31,16 +36,63 @@ ASSET_PATTERN = re.compile(r"HFLinkSDK.*\.zip$", re.IGNORECASE)
 TAG_PATTERN = re.compile(r"[A-Za-z0-9._-]+")
 TRUSTED_HOSTS = {"api.github.com", "github.com"}
 
+_TOKEN = None
 
-def open_url(url):
-    """仅允许 https + GitHub 受信域名的 GET 请求。"""
+
+def get_token():
+    """解析 token：环境变量 HF_LINK_SDK_TOKEN 优先，其次本机 git credential（github.com）。"""
+    global _TOKEN
+    if _TOKEN is not None:
+        return _TOKEN
+    import os
+
+    _TOKEN = os.environ.get("HF_LINK_SDK_TOKEN") or None
+    if not _TOKEN:
+        try:
+            fill = subprocess.run(
+                ["git", "credential", "fill"],
+                input="protocol=https\nhost=github.com\n\n",
+                capture_output=True,
+                text=True,
+                timeout=15,
+            ).stdout
+            match = re.search(r"^password=(.+)$", fill, re.MULTILINE)
+            _TOKEN = match.group(1).strip() if match else None
+        except (OSError, subprocess.SubprocessError):
+            _TOKEN = None
+    return _TOKEN
+
+
+def open_url(url, accept="application/vnd.github+json", follow_redirect_token=False):
+    """仅允许 https + GitHub 受信域名的 GET 请求；有 token 时附认证。
+
+    follow_redirect_token=False 时禁止自动跟随重定向（302 时返回
+    (None, location)），避免认证头被带到外部下载域。
+    """
     parts = urllib.parse.urlparse(url)
     if parts.scheme != "https" or parts.hostname not in TRUSTED_HOSTS:
         print(f"错误：拒绝请求非受信地址：{url}", file=sys.stderr)
         sys.exit(1)
-    request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
-    with urllib.request.urlopen(request, timeout=120) as response:
-        return response
+    request = urllib.request.Request(url, headers={"Accept": accept})
+    token = get_token()
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    if not follow_redirect_token:
+        opener = urllib.request.build_opener(NoRedirect)
+        try:
+            return opener.open(request, timeout=120), None
+        except urllib.error.HTTPError as error:
+            if error.code in (301, 302, 303, 307, 308):
+                return None, error.headers.get("Location")
+            raise
+    return urllib.request.urlopen(request, timeout=120), None
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """禁止 urllib 自动跟随重定向（防止 Authorization 头外泄）。"""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 def fetch_from_release(tag):
@@ -51,18 +103,38 @@ def fetch_from_release(tag):
     api_url = f"https://api.github.com/repos/{SDK_REPO}/releases/tags/{tag}"
     if tag == "latest":
         api_url = f"https://api.github.com/repos/{SDK_REPO}/releases/latest"
-    with open_url(api_url) as response:
-        release = json.load(response)
+    try:
+        with open_url(api_url) as response:
+            release = json.load(response)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            print(
+                f"错误：无法访问 release（{tag}）。HFLink_SDK 为私有仓库时需要 token：\n"
+                "  设置环境变量 HF_LINK_SDK_TOKEN（对 HFLink_SDK 有 contents:read 的 PAT），\n"
+                "  或在本机 git credential 中保存 github.com 凭证；\n"
+                "  另请确认该 release 已发布且存在 HFLinkSDK 附件 zip。",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        raise
     assets = [a for a in release.get("assets", []) if ASSET_PATTERN.search(a["name"])]
     if not assets:
-        print(f"错误：release {release.get('tag_name', tag)} 未找到 SDK 开发包（HFLinkSDK-*-win64.zip）",
+        print(f"错误：release {release.get('tag_name', tag)} 未找到 SDK 开发包（HFLinkSDK*.zip）",
               file=sys.stderr)
         sys.exit(1)
-    asset_name = assets[0]["name"]
-    download_url = f"https://github.com/{SDK_REPO}/releases/download/{tag}/{asset_name}"
-    print(f"[docs] 下载 {asset_name} ...")
-    with open_url(download_url) as response:
-        archive = zipfile.ZipFile(io.BytesIO(response.read()))
+    asset = assets[0]
+    print(f"[docs] 下载 {asset['name']} ...")
+    # 私有仓库资产下载：走 API octet-stream 端点（认证在 api.github.com 上完成），
+    # 302 到的预签名下载 URL 不携带 token。
+    asset_url = f"https://api.github.com/repos/{SDK_REPO}/releases/assets/{asset['id']}"
+    response, location = open_url(asset_url, accept="application/octet-stream")
+    if response is None and location:
+        parts = urllib.parse.urlparse(location)
+        if parts.scheme != "https":
+            print("错误：下载重定向地址非 https，已中止", file=sys.stderr)
+            sys.exit(1)
+        response = urllib.request.urlopen(location, timeout=300)
+    archive = zipfile.ZipFile(io.BytesIO(response.read()))
     extracted = 0
     for name in archive.namelist():
         parts = name.split("/")
@@ -70,7 +142,7 @@ def fetch_from_release(tag):
             (HEADERS_DIR / parts[-1]).write_bytes(archive.read(name))
             extracted += 1
     if not extracted:
-        print("错误：开发包内未找到 include/*.h，包结构已变更", file=sys.stderr)
+        print("错误：开发包内未找到 include 目录或头文件，包结构已变更", file=sys.stderr)
         sys.exit(1)
     version = tag
     for name in archive.namelist():

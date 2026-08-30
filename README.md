@@ -23,6 +23,10 @@ python scripts/fetch_headers.py --sdk D:/source/HFLinkSDK # 或从本地 SDK 仓
 python scripts/build_docs.py
 ```
 
+> HFLink_SDK 为私有仓库：`--release` 需要认证——设置环境变量 `HF_LINK_SDK_TOKEN`
+> （对该仓库有 contents:read 的 PAT），或在本机 git credential 中保存 github.com 凭证
+> （脚本自动读取）；CI 中通过 `DOCS_PAT` secret 注入。
+
 构建产物在 `source/_build/html/`，用浏览器打开 `index.html`。
 
 ## 目录结构

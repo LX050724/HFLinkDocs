@@ -38,6 +38,9 @@ jobs:
 
       - name: Fetch SDK headers
         run: python scripts/fetch_headers.py --release latest
+        env:
+          # HFLink_SDK 为私有仓库：需要对该仓库有 contents:read 的 PAT
+          HF_LINK_SDK_TOKEN: ${{ secrets.DOCS_PAT }}
 
       - name: Generate Doxygen XML
         run: mkdir -p doxygen/xml && doxygen Doxyfile
