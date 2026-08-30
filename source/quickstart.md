@@ -4,9 +4,15 @@
 
 ## 前置条件
 
-- 一台 HFLink 探针（或第三方 CMSIS-DAP 探针，部分能力受限）
+- 一台 HFLink 探针（如 HSLink Pro），或部分受支持的第三方 CMSIS-DAP 探针
+  
 - 已安装目标芯片的 CMSIS-Pack（例如 `STM32H7xx_DFP`），Pack 管理工具或 `HFLink_Pack_ListInstalled` 可查询
 - C 集成：链接 `HFLinkDriver.dll`（含导入库），头文件包含路径指向 SDK `Driver/include/` 目录
+
+支持的第三方CMSIS-DAP：
+
+- [HSLink Pro CherryDAP](https://cherrydap.cherry-embedded.org/projects/HSLink%20Pro.html)
+
 
 ## C API：枚举并打开探针
 
