@@ -15,42 +15,46 @@
 extern "C" {
 #endif
 
+/** @brief 探针物理连接类型。 */
 typedef enum
 {
-    HFLINK_INFERFACE_USB,
-    HFLINK_INFERFACE_IP,
+    HFLINK_INFERFACE_USB, ///< USB 连接
+    HFLINK_INFERFACE_IP,  ///< 网络连接
 } HFLink_Interface;
 
+/** @brief 探针设备信息（HFLink_GetDeviceInfo 填充）。 */
 typedef struct
 {
-    int speed;
-    HFLink_Interface interface;
-    char serial_number[33];
-    char device_name[129];
+    int speed;                  ///< 调试时钟（Hz）
+    HFLink_Interface interface; ///< 连接类型
+    char serial_number[33];     ///< 序列号（32 字符 + 终止符）
+    char device_name[129];      ///< 产品名（128 字符 + 终止符）
     /** 非零表示第三方 DAP（如 CherryUSB CMSIS-DAP）：禁用 configure/升级/传感器/SWO，速度上限 10MHz，FIFO 深度 1 */
     int is_thirdparty;
 } HFLink_DeviceInfo;
 
+/** @brief 探针固件升级状态机控制块（调用方分配，见 HFLink_Upgrade* 系列）。 */
 typedef struct
 {
-    uint8_t *buff;
-    int len;
-    int wlen;
-    uint32_t checksum;
+    uint8_t *buff;     ///< 固件数据；UpgradeFile 路径下为堆缓冲，由 HFLink_UpgradeFree 释放
+    int len;           ///< 固件总长度（字节）
+    int wlen;          ///< 已发送长度（字节）
+    uint32_t checksum; ///< 固件 CRC32 校验和
     enum
     {
-        HFLINK_UPG_FAULT,
-        HFLINK_UPG_IDLE,
-        HFLINK_UPG_ERASE,
-        HFLINK_UPG_FLASH,
-        HFLINK_UPG_VERIFY,
-        HFLINK_UPG_SUCCESS,
-        HFLINK_UPG_TIMEOUT,
-    } status;
-    int delay_cnt;
-    int timeout_cnt;
+        HFLINK_UPG_FAULT,  ///< 故障终态
+        HFLINK_UPG_IDLE,   ///< 空闲（已准备好，待首次 Tick）
+        HFLINK_UPG_ERASE,  ///< 擦除/写入进行中
+        HFLINK_UPG_FLASH,  ///< 写入进行中
+        HFLINK_UPG_VERIFY, ///< 校验进行中（CRC32 回读比对）
+        HFLINK_UPG_SUCCESS,///< 成功终态
+        HFLINK_UPG_TIMEOUT,///< 超时终态
+    } status;          ///< 状态机当前状态
+    int delay_cnt;     ///< 内部轮询计数（VERIFY 阶段）
+    int timeout_cnt;   ///< 内部超时/重试计数
 } HFLink_Upgrade;
 
+/** @brief 调试时钟频率映射表（每通道使能位图，按 HFLINK_CONFIG_FREQ_MAP 配置项读写）。 */
 typedef struct
 {
     uint32_t freq_10MHz_map;
@@ -66,16 +70,18 @@ typedef struct
     uint32_t freq_5KHz_map;
 } HFLink_Config_FreqMap;
 
+/** @brief 输入输出信号延迟配置（按 HFLINK_CONFIG_IODELAY 配置项读写，单位为内部时钟节拍）。 */
 typedef struct
 {
-    uint8_t TCK_DELAY;
-    uint8_t TMS_T_DELAY;
-    uint8_t TMS_O_DELAY;
-    uint8_t TMS_I_DELAY;
-    uint8_t TDO_DELAY;
-    uint8_t TDI_DELAY;
+    uint8_t TCK_DELAY;   ///< JTAG TCK 延迟
+    uint8_t TMS_T_DELAY; ///< TMS 转向延迟
+    uint8_t TMS_O_DELAY; ///< TMS 输出延迟
+    uint8_t TMS_I_DELAY; ///< TMS 输入延迟
+    uint8_t TDO_DELAY;   ///< TDO 延迟
+    uint8_t TDI_DELAY;   ///< TDI 延迟
 } HFLink_Config_IODELAY;
 
+/** @brief LED 显示模式。 */
 typedef enum
 {
     HFLINK_LED_MODE_DEFAULT = 0,
@@ -110,12 +116,15 @@ typedef enum
     HFLINK_CONFIG_FW_VERSION = 0xFF,
 } HFLink_Config;
 
+/** @brief 传感器编号（当前仅基础组：电压/电流类）。 */
 typedef enum
 {
     HFLINK_SENSOR_BASE = 0,
 } HFLink_Sensor;
 
+/** @brief 升级进度回调（percent 百分比，status 为 HFLINK_UPG_* 状态值）。 */
 typedef void (*HFLink_upgrade_cb)(int percent, int status);
+/** @brief 设备对象句柄（HFLink_Open 创建，HFLink_Close 释放）。 */
 typedef struct HFLink_Device *HFLink_Handle;
 
 typedef struct coresight_dp HFLink_CoreSightDP;
@@ -301,29 +310,115 @@ typedef struct
 /** SWO 数据回调类型，在内部线程中调用，需保证线程安全 */
 typedef void (*HFLink_SWO_Callback)(const uint8_t *data, uint32_t len, void *userdata);
 
+/** @brief 获取驱动 DLL 版本号，格式 0xMMmmpp（主.次.补丁，如 0x00010100 为 1.1.0）。 */
 HFLINK_API uint32_t HFLink_GetDllVersion(void);
+
+/**
+ * @brief 初始化驱动：建立 libusb 上下文，可选启动后台 USB 事件线程。
+ * @param use_async 非 0 启用 libusb 事件后台线程；0 时事件在调用线程内处理。
+ * @return HFLINK_OK 成功；HFLINK_ERR 初始化失败。
+ * @note 必须在枚举/打开设备之前调用；Windows 下会将系统定时器精度提升到 1ms，由 HFLink_Cleanup() 还原。
+ */
 HFLINK_API int HFLink_Initialize(int use_async);
+
+/** @brief 清理驱动：停止事件线程并释放 libusb 上下文；未初始化时安全返回 HFLINK_OK。 */
 HFLINK_API int HFLink_Cleanup(void);
+
+/**
+ * @brief 枚举当前接入的探针（HFLink 原生 + 白名单第三方 CMSIS-DAP）。
+ * @param[out] info    调用方分配的设备信息数组。
+ * @param      max_num 数组容量，超出部分被截断。
+ * @return 实际枚举到的设备数量（0 表示无探针）；HFLINK_ERR_NOT_INITIALIZED 未初始化；负数为错误。
+ */
 HFLINK_API int HFLink_GetDeviceInfo(HFLink_DeviceInfo *info, uint32_t max_num);
+
+/**
+ * @brief 打开枚举到的探针并创建设备对象。
+ * @param       info   目标设备信息（来自 HFLink_GetDeviceInfo）。
+ * @param[out]  handle 接收设备句柄。
+ * @return HFLINK_OK 成功；负数为错误。第三方探针 is_thirdparty 非 0，部分能力不可用。
+ */
 HFLINK_API int HFLink_Open(HFLink_DeviceInfo *info, HFLink_Handle *handle);
+
+/** @brief 关闭设备并释放设备对象；句柄此后不可再使用。 */
 HFLINK_API int HFLink_Close(HFLink_Handle handle);
 
+/** @brief 读取探针序列号；返回设备内部缓冲借用指针（设备生存期有效，无需释放），失败返回 NULL。 */
 HFLINK_API char *HFLink_GetSerialNumber(HFLink_Handle handle);
+
+/** @brief 读取探针型号名；返回借用指针，语义同 HFLink_GetSerialNumber()。 */
 HFLINK_API char *HFLink_GetModelName(HFLink_Handle handle);
 
+/**
+ * @brief 用内存位流准备探针固件升级状态机。
+ * @param upg_ctl 升级控制块（调用方分配并保持生存期）；data 被借用至升级结束，不拷贝。
+ * @return HFLINK_OK 成功；HFLINK_ERR_UNSUPPORTED 第三方 DAP 不支持；参数非法返回 -1。
+ * @note 之后需周期调用 HFLink_UpgradeTick() 驱动状态机，直至 status 到达终态。
+ */
 HFLINK_API int HFLink_UpgradeBitstream(HFLink_Handle handle, HFLink_Upgrade *upg_ctl, uint8_t *data, uint32_t len);
+
+/**
+ * @brief 用固件文件准备升级状态机；文件读入堆缓冲，所有权转移给 upg_ctl。
+ * @return 同 HFLink_UpgradeBitstream()；文件读取失败返回负数且 status 置 HFLINK_UPG_FAULT。
+ */
 HFLINK_API int HFLink_UpgradeFile(HFLink_Handle handle, HFLink_Upgrade *upg_ctl, const char *path);
+
+/**
+ * @brief 升级状态机单步驱动；调用方以固定周期（约 1~10ms）调用直至 status 到达终态。
+ * @return 0 本步执行成功（含仍在进行中）；-1 失败（status 已置 FAULT 或 TIMEOUT）。
+ * @note 状态流转 IDLE →（复位+启动）→ ERASE/FLASH（按 256 字节页）→ VERIFY（CRC32 回读比对）→ SUCCESS。
+ */
 HFLINK_API int HFLink_UpgradeTick(HFLink_Handle handle, HFLink_Upgrade *upg_ctl);
+
+/** @brief 结束升级并释放升级缓冲（含 UpgradeFile 的堆缓冲），控制块清零；始终返回 0。 */
 HFLINK_API int HFLink_UpgradeFree(HFLink_Handle handle, HFLink_Upgrade *upg_ctl);
 
+/**
+ * @brief 设置探针配置项，附加参数类型随 conf 而定：
+ *        - `HFLINK_CONFIG_5V_SUPPLY` / `INDEPENDENT_UART` / `FREQ_MAP_EN`：`char`（'0' 或 '1'）
+ *        - `HFLINK_CONFIG_FREQ_MAP`：`HFLink_Config_FreqMap *`
+ *        - `HFLINK_CONFIG_IODELAY`：`HFLink_Config_IODELAY *`
+ *        - `HFLINK_CONFIG_LEDMODE`：`HFLink_LedMode`
+ *        - `HFLINK_CONFIG_NICKNAME`：`char *`（UTF-8 别名，超长按 31 字符截断）
+ * @return HFLINK_OK 成功；HFLINK_ERR_UNSUPPORTED 第三方 DAP 不支持。
+ */
 HFLINK_API int HFLink_Configure_SetItem(HFLink_Handle handle, HFLink_Config conf, ...);
+
+/**
+ * @brief 读取探针配置项，附加参数为对应类型的传出指针：
+ *        - 布尔三项（见 HFLink_Configure_SetItem()）：`char *`（接收 '0'/'1'）
+ *        - `FREQ_MAP` / `IODELAY`：对应结构体指针
+ *        - `LEDMODE`：`HFLink_LedMode *`
+ *        - `NICKNAME`：`char *`（容量至少 32 字节）
+ *        - `BUILD_DATE` / `FW_VERSION`：`(char *buf, int size)`，接收构建日期/固件版本字符串
+ * @return HFLINK_OK 成功；负数为错误。
+ */
 HFLINK_API int HFLink_Configure_GetItem(HFLink_Handle handle, HFLink_Config conf, ...);
+
+/** @brief 将已写入的配置保存到探针持久存储（掉电保留）。 */
 HFLINK_API int HFLink_Configure_Save(HFLink_Handle handle);
 
+/**
+ * @brief 读取传感器数据（当前 HFLINK_SENSOR_BASE：电压/电流类）。
+ * @param[out] data 接收数据缓冲（长度按传感器约定，建议 ≥ 64 字节）。
+ * @return HFLINK_OK 成功；HFLINK_ERR_UNSUPPORTED 第三方 DAP 不支持。
+ */
 HFLINK_API int HFLink_Sensor_Read(HFLink_Handle handle, HFLink_Sensor sensor, uint8_t *data, uint32_t len);
 
+/**
+ * @brief 启动 SWO 异步流式读取。
+ *
+ * 使用多缓冲 libusb 异步 transfer 实现零间隙连续接收；回调在内部事件线程中调用，需保证线程安全。
+ *
+ * @param callback    SWO 数据回调，每收到一包数据即调用
+ * @param userdata    回调用户数据
+ * @param buffer_size 每个 transfer 的缓冲区大小（字节），0 则使用默认 4096
+ * @return HFLINK_OK 成功，HFLINK_ERR_BUSY 已启动，HFLINK_ERR 参数无效
+ */
 HFLINK_API int HFLink_SWO_Start(HFLink_Handle handle, HFLink_SWO_Callback callback, void *userdata,
                                 uint32_t buffer_size);
+
+/** @brief 停止 SWO 异步流式读取：取消所有在途 transfer 并释放资源。 */
 HFLINK_API int HFLink_SWO_Stop(HFLink_Handle handle);
 
 /**
