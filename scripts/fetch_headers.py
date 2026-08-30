@@ -104,8 +104,7 @@ def fetch_from_release(tag):
     if tag == "latest":
         api_url = f"https://api.github.com/repos/{SDK_REPO}/releases/latest"
     try:
-        with open_url(api_url) as response:
-            release = json.load(response)
+        response, redirect_location = open_url(api_url)
     except urllib.error.HTTPError as error:
         if error.code == 404:
             print(
@@ -117,6 +116,11 @@ def fetch_from_release(tag):
             )
             sys.exit(1)
         raise
+    if response is None:
+        print(f"错误：release 查询被重定向至 {redirect_location}，已中止", file=sys.stderr)
+        sys.exit(1)
+    with response:
+        release = json.load(response)
     assets = [a for a in release.get("assets", []) if ASSET_PATTERN.search(a["name"])]
     if not assets:
         print(f"错误：release {release.get('tag_name', tag)} 未找到 SDK 开发包（HFLinkSDK*.zip）",
