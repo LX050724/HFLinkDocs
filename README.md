@@ -1,6 +1,8 @@
 # HFLinkSDK 文档
 
-HFLinkSDK（基于 CMSIS-DAP 协议的调试器驱动 SDK）的官方文档源，使用 **Sphinx + Read the Docs** 构建，部署于 Read the Docs 多版本站点。
+HFLinkSDK（基于 CMSIS-DAP 协议的调试器驱动 SDK）的官方文档源，使用 **Sphinx + Read the Docs** 构建。
+
+**在线阅读**：<https://lx050724.github.io/HFLinkDocs/>
 
 - API 参考由 **Doxygen + Breathe** 从 `sdk-headers/` 快照中的公开头文件自动抽取（含中文 Doxygen 注释）
 - CLI / Lua 脚本使用手册为手写 MyST Markdown
