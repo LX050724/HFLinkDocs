@@ -1,0 +1,9 @@
+/* 站点排版微调 */
+.wy-nav-content {
+  max-width: 960px;
+}
+
+/* C 签名块与长参数列表换行 */
+.rst-content dl:not(.docutils) dt {
+  white-space: normal;
+}

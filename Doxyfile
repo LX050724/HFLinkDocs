@@ -1,0 +1,44 @@
+# HFLinkSDK 文档 Doxygen 配置：仅生成 XML，供 Breathe 消费。
+# 输入为 sdk-headers/ 快照（勿手工编辑），由 scripts/sync_headers.py 更新。
+
+PROJECT_NAME           = "HFLinkSDK"
+PROJECT_BRIEF          = "基于 CMSIS-DAP 协议的调试器驱动 SDK"
+
+INPUT                  = sdk-headers
+FILE_PATTERNS          = *.h
+RECURSIVE              = NO
+
+# import.h 中的 #define HFLINK_API 会覆盖 PREDEFINED，必须排除以让宏展开为空
+EXCLUDE                = sdk-headers/HFLinkDriver_import.h
+
+# HFLINK_API 是导出宏，展开为空后函数声明按普通签名解析
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+PREDEFINED             = HFLINK_API=
+
+# 全量抽取：无注释符号也进 XML（Breathe 只渲染被存根页引用的成员）
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+
+INPUT_ENCODING         = UTF-8
+OUTPUT_LANGUAGE        = Chinese
+
+# 仅 XML
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+GENERATE_XML           = YES
+XML_OUTPUT             = doxygen/xml
+
+# 注释风格：显式 @brief，不启用 JAVADOC_AUTOBRIEF
+JAVADOC_AUTOBRIEF      = NO
+QT_AUTOBRIEF           = NO
+
+# 关闭无关输出
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_NO_PARAMDOC       = NO
+SHOW_FILES             = NO
+SORT_BRIEF_DOCS        = NO
+TYPEDEF_HIDES_STRUCT   = YES
+HIDE_UNDOC_RELATIONS   = YES

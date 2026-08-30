@@ -1,0 +1,13 @@
+# Sphinx 构建输出
+source/_build/
+
+# 生成产物（由 scripts/gen_api_rst.py 产出，不入库）
+source/api/_generated/
+
+# Doxygen XML 输出
+doxygen/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
