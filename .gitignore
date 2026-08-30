@@ -1,3 +1,6 @@
+# 头文件获取目录（由 scripts/fetch_headers.py 从 SDK release 或本地 SDK 生成，不入库）
+sdk-headers/
+
 # Sphinx 构建输出
 source/_build/
 

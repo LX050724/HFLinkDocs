@@ -22,21 +22,25 @@ def _git(*args):
     return result.stdout.strip() or None
 
 
-def _read_sdk_commit():
-    """从头文件快照的 SYNC_INFO 读取 SDK 来源 commit。"""
+def _read_sdk_version():
+    """从头文件获取记录（SYNC_INFO）读取 SDK 来源：优先 release tag，回退 commit。"""
     info = ROOT / "sdk-headers" / "SYNC_INFO"
     if not info.is_file():
         return "unknown"
-    match = re.search(r"^sdk_commit:\s*(\S+)", info.read_text(encoding="utf-8"), re.MULTILINE)
-    return match.group(1) if match else "unknown"
+    text = info.read_text(encoding="utf-8")
+    tag = re.search(r"^sdk_tag:\s*(\S+)", text, re.MULTILINE)
+    commit = re.search(r"^sdk_commit:\s*(\S+)", text, re.MULTILINE)
+    if tag:
+        return tag.group(1)
+    return commit.group(1) if commit else "unknown"
 
 
 _author = "HFLink Project"
 _release = _git("describe", "--tags", "--always") or "latest"
-_sdk_commit = _read_sdk_commit()
+_sdk_version = _read_sdk_version()
 
 project = "HFLinkSDK"
-copyright = f"2026, {_author} · API 参考基于 SDK commit {_sdk_commit}"
+copyright = f"2026, {_author} · API 参考基于 SDK {_sdk_version}"
 author = _author
 version = _release
 release = _release

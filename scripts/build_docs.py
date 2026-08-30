@@ -4,6 +4,10 @@
 用法：
     python scripts/build_docs.py
 
+前置：头文件需先获取到 sdk-headers/（目录为空时报错）：
+    python scripts/fetch_headers.py --release latest     # 从 SDK release 下载
+    python scripts/fetch_headers.py --sdk <HFLinkSDK路径>  # 本地开发调试
+
 流程：
 1. 确保 .venv 虚拟环境存在（缺失时用系统 python 创建）
 2. 通过 venv 环境检测并安装 requirements.txt 依赖
@@ -14,6 +18,7 @@
 环境变量注入，不依赖进程重启。
 """
 
+import importlib.util
 import os
 import re
 import shutil
@@ -23,6 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 VENV_DIR = ROOT / ".venv"
+HEADERS_DIR = ROOT / "sdk-headers"
 
 # venv 内必须可导入的依赖包
 DEPENDENCY_IMPORTS = "import sphinx, breathe, myst_parser, sphinx_rtd_theme"
@@ -73,7 +79,7 @@ def check_doxygen():
     if not doxygen:
         print(
             "错误：未找到 doxygen。请安装后重试：\n"
-            "  Windows: winget install Doxygen.Doxygen  或官网 https://www.doxygen.nl/download.html\n"
+            "  Windows: winget install DimitriVanHeesch.Doxygen  或官网 https://www.doxygen.nl/download.html\n"
             "  macOS:   brew install doxygen\n"
             "  Debian/Ubuntu: sudo apt install doxygen",
             file=sys.stderr,
@@ -91,11 +97,25 @@ def check_doxygen():
         raise SystemExit(1)
 
 
+def check_headers():
+    """sdk-headers 为空时报错并指引获取方式。"""
+    if (HEADERS_DIR / "SYNC_INFO").is_file() and list(HEADERS_DIR.glob("*.h")):
+        return
+    print(
+        "错误：sdk-headers/ 为空。请先获取头文件：\n"
+        "  python scripts/fetch_headers.py --release latest        # 从 SDK release 下载\n"
+        "  python scripts/fetch_headers.py --sdk <HFLinkSDK 路径>  # 本地开发调试",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+
 def main():
     ensure_venv()
     activate_venv()
     ensure_dependencies()
     check_doxygen()
+    check_headers()
 
     print("[docs] doxygen Doxyfile")
     (ROOT / "doxygen" / "xml").mkdir(parents=True, exist_ok=True)

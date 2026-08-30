@@ -4,9 +4,9 @@ HFLinkSDK（基于 CMSIS-DAP 协议的调试器驱动 SDK）的官方文档源�
 
 **在线阅读**：<https://lx050724.github.io/HFLinkDocs/>
 
-- API 参考由 **Doxygen + Breathe** 从 `sdk-headers/` 快照中的公开头文件自动抽取（含中文 Doxygen 注释）
+- API 参考由 **Doxygen + Breathe** 从 HFLinkDriver 公开头文件自动抽取（含中文 Doxygen 注释）
 - CLI / Lua 脚本使用手册为手写 MyST Markdown
-- 头文件快照来自 [HFLinkSDK](https://github.com/LX050724/HFLink_SDK) 仓库，`sdk-headers/SYNC_INFO` 记录快照对应的 SDK commit
+- 头文件**不入库**：构建时从 [HFLinkSDK](https://github.com/LX050724/HFLink_SDK) 的 release 开发包获取（`sdk-headers/SYNC_INFO` 记录来源版本），或从本地 SDK 仓库复制
 
 ## 本地构建
 
@@ -15,8 +15,9 @@ HFLinkSDK（基于 CMSIS-DAP 协议的调试器驱动 SDK）的官方文档源�
 ```bash
 pip install -r requirements.txt
 
-# 1. 从本地 HFLinkSDK 仓库同步头文件快照（改动 SDK 头文件后重新执行）
-python scripts/sync_headers.py --sdk D:/source/HFLinkSDK
+# 1. 获取头文件（二选一）
+python scripts/fetch_headers.py --release latest          # 从 SDK 最新 release 下载
+python scripts/fetch_headers.py --sdk D:/source/HFLinkSDK # 或从本地 SDK 仓库复制（开发调试）
 
 # 2. 一键构建（doxygen → 生成 API 存根 → sphinx-build）
 python scripts/build_docs.py
@@ -28,11 +29,11 @@ python scripts/build_docs.py
 
 ```
 ├── Doxyfile              # Doxygen 配置（仅输出 XML，供 Breathe 消费）
-├── sdk-headers/          # HFLinkSDK 公开头文件快照（勿手改，用 sync_headers.py 更新）
+├── sdk-headers/          # 头文件获取目录（不入库，fetch_headers.py 生成）
 ├── scripts/
-│   ├── sync_headers.py   # 从本地 SDK 仓库同步头文件快照
+│   ├── fetch_headers.py  # 从 SDK release 开发包或本地仓库获取头文件
 │   ├── gen_api_rst.py    # 按功能域生成 API 参考存根页（含覆盖自检）
-│   └── build_docs.py     # 本地一键构建
+│   └── build_docs.py     # 本地一键构建（自动 venv + 依赖）
 └── source/
     ├── conf.py           # Sphinx 配置（zh_CN，rtd_theme，MyST + Breathe）
     ├── quickstart.md     # 快速开始
@@ -43,5 +44,6 @@ python scripts/build_docs.py
 ## 发布
 
 - **GitHub Pages**：仓库 Settings → Pages → Source 选 **GitHub Actions** 后，每次推送 master/main 自动部署最新文档站（配置见 `.github/workflows/pages.yml`），地址 `https://<用户名>.github.io/<仓库名>/`。
-- **Read the Docs**：将本仓库导入 [readthedocs.org](https://readthedocs.org)，每个 git tag 自动构建一个版本站点（配置见 `.readthedocs.yaml`）；Pages 展示最新版，历史版本由 RTD 提供。
-- **GitHub Release**：推送 `v*` tag 时，GitHub Actions 自动构建离线 HTML 并作为附件上传（配置见 `.github/workflows/release.yml`）。
+- **SDK release 联动**：HFLink_SDK 发布 release 时自动通过 `repository_dispatch` 触发 `sdk-release.yml`：从该 release 的 SDK 开发包获取头文件 → 构建文档 → 以同名 tag 发布文档 release，附离线 HTML zip。
+- **手动 tag 发布**：推送 `v*` tag 也会按对应 SDK release 构建并发布（配置见 `.github/workflows/release.yml`）。
+- **Read the Docs**（可选）：导入 [readthedocs.org](https://readthedocs.org) 可获得多版本站点（配置见 `.readthedocs.yaml`）。
