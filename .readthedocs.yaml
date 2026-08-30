@@ -9,6 +9,9 @@ build:
     python: "3.12"
   apt_packages:
     - doxygen
+  jobs:
+    pre_build:
+      - mkdir -p doxygen/xml && doxygen Doxyfile
 
 sphinx:
   configuration: source/conf.py

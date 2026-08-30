@@ -27,7 +27,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Generate Doxygen XML
-        run: doxygen Doxyfile
+        run: mkdir -p doxygen/xml && doxygen Doxyfile
 
       - name: Generate API stubs
         run: python scripts/gen_api_rst.py
