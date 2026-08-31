@@ -4,14 +4,39 @@
 
 ## 前置条件
 
-- 一台 HFLink 探针（如 HSLink Pro），或部分受支持的第三方 CMSIS-DAP 探针
+- 一台 HFLink 探针，或部分受支持的第三方 CMSIS-DAP 探针
   
 - 已安装目标芯片的 CMSIS-Pack（例如 `STM32H7xx_DFP`），Pack 管理工具或 `HFLink_Pack_ListInstalled` 可查询
-- C 集成：链接 `HFLinkDriver.dll`（含导入库），头文件包含路径指向 SDK `Driver/include/` 目录
+- C 集成：SDK 开发包以 CMake 包模式分发（自带 `HFLinkDriverConfig.cmake`），用法见下文「C 集成：CMake 包」
 
 支持的第三方CMSIS-DAP：
 
 - [HSLink Pro CherryDAP](https://cherrydap.cherry-embedded.org/projects/HSLink%20Pro.html)
+
+## C 集成：CMake 包
+
+开发包解压后即包含头文件（`include/`）、Windows 导入库（`lib/HFLinkDriver.lib`）与 `HFLinkDriver.dll`，
+通过 CMake 包模式引入：
+
+```cmake
+# CMakeLists.txt
+# HFLINK_SDK_DIR 指向 SDK 开发包解压目录
+list(APPEND CMAKE_PREFIX_PATH "${HFLINK_SDK_DIR}")
+
+add_executable(my_app main.c)
+find_package(HFLinkDriver REQUIRED)
+target_link_libraries(my_app PRIVATE HFLinkDriver::HFLinkDriver)
+```
+
+`HFLinkDriver::HFLinkDriver` 目标已附带头文件目录与导入库，无需再手动配置 include/lib 路径。
+运行程序时需将包根目录下的 `HFLinkDriver.dll` 及其依赖 DLL（`libusb-1.0.dll`、`cjson.dll`、
+`dwarf.dll`、`zip.dll`、`libz.dll` 等）置于可执行文件同目录或加入 PATH，也可构建时自动拷贝：
+
+```cmake
+add_custom_command(TARGET my_app POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:HFLinkDriver::HFLinkDriver>" "$<TARGET_FILE_DIR:my_app>")
+```
 
 
 ## C API：枚举并打开探针
