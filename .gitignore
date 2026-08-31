@@ -14,3 +14,7 @@ doxygen/
 __pycache__/
 *.pyc
 .venv/
+
+# ZCode 工作区指令文件（不入库）
+.zcode/
+.mimosa/
