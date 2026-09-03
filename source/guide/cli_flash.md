@@ -43,12 +43,11 @@ Usage: HFLinkCLI flash <command> [options]
 
 | 选项 | 参数 | 默认值 | 说明 |
 |------|------|--------|------|
-| `--reset` | `none\|system\|processor\|hardware` | `none` | 连接阶段复位类型 |
+| `--reset` | `none\|system\|processor\|hardware` | `system` | 连接阶段复位类型；默认系统复位，使下载从确定的复位态开始 |
 | `--under-reset` | flag | off | nRESET 有效期间连接（under-reset） |
 | `--pre-reset` | flag | off | 正常连接序列前先复位 |
-| `--reset-after` | flag | off | 编程完成后执行 Pack 默认复位 |
+| `--reset-after` | flag | off | 编程完成后执行 Pack 默认复位，恢复目标运行 |
 | `--reset-scope` | `core\|chip\|chain\|physical-chain` | `chip` | 后复位影响范围；必须与 `--reset-after` 同用 |
-| `--run` | flag | off | 编程/复位后恢复所选核运行；未显式选复位时隐含 `--reset-after` |
 | `--jtag-auto` | flag | off | JTAG 下自动扫描物理链并映射 TAP；SWD 下禁止 |
 
 ## 交叉校验规则
@@ -59,7 +58,7 @@ Usage: HFLinkCLI flash <command> [options]
 - 在线命令（erase/write/verify/program）缺 `--image`
 - SWD 下使用 `--jtag-auto`
 - JTAG 在线命令未提供 `--jtag-auto`
-- `--reset-after` / `--run` / `--reset-scope` 用于非 `program` 子操作
+- `--reset-after` / `--reset-scope` 用于非 `program` 子操作
 
 ## 示例
 
@@ -69,7 +68,7 @@ HFLinkCLI flash probe --pack STM32H723ZGTx@STM32H7xx_DFP --interface swd --speed
 
 # 完整下载 + 编程后复位并运行
 HFLinkCLI flash program --pack STM32H723ZGTx@STM32H7xx_DFP --interface swd --speed 10000000 \
-    --image app.elf --run
+    --image app.elf --reset-after
 
 # 指定自定义 FLM 算法与整片擦除
 HFLinkCLI flash erase --pack STM32H723ZGTx@STM32H7xx_DFP --interface swd --speed 10000000 \

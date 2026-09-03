@@ -32,3 +32,9 @@ CMSIS-Pack 解析与 Flash 下载等能力，由以下组件构成：
    :caption: API 参考
 
    api/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: 更新日志
+
+   changelog
