@@ -33,11 +33,14 @@ Usage: HFLinkCLI flash <command> [options]
 | `--algorithm` | `[0xADDR@]FLM` | 无 | 覆盖 Pack 默认算法：Pack FLM 基名或自定义 FLM 路径；含 `/`、`\`、盘符时视为路径；匹配 bank 数必须恰好为 1 |
 | `--address-space` | `<id>` | 无 | 内存 AP / 地址空间选择（十六进制可用） |
 | `--erase` | `sectors\|chip` | `sectors` | 擦除策略；`chip` 为整片擦除 |
+| `--force-prog` | flag | off | 强制擦写所有扇区，禁用跳过优化 |
 | `--verify-mode` | `crc\|readback` | `crc` | 校验模式（Classic 恒为 readback） |
 | `--no-turbo` | flag | off | 强制 Classic 同步 runner（默认 Turbo；Turbo 失败不回退） |
 | `--pname` | `<name>` | 无 | 选择执行处理器（Pname） |
 | `--punit` | `<index>` | 无 | 选择处理器单元 |
 | `--hook` | `<path>` | 无 | 连接前加载用户 Hook 脚本（Lua） |
+
+默认开启跳过优化：擦除前将待烧录扇区与镜像预期内容比对，内容已一致的扇区整扇区跳过、空白扇区跳过擦除，重复下载明显加快；`--force-prog` 可禁用。另外，待烧录范围覆盖整个 bank 且算法支持整片擦除时，会自动用一次整片擦除替代逐扇区擦除。
 
 ### 复位选项（仅 `program`）
 
