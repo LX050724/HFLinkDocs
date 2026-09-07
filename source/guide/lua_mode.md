@@ -1,7 +1,8 @@
 # Lua 脚本模式
 
 未指定 `flash` / `gdb` / `rtt` 子命令时，HFLinkCLI 进入内嵌 **Lua 5.4** 脚本模式，适合自动化
-脚本、产线工具与快速实验。脚本无需 `require` 加载模块，启动时自动注册全局表 `hf`。
+脚本、产线工具与快速实验。与 AI 编程助手结合进行自动化调试的思路与案例见 {doc}`ai_automation`。
+脚本无需 `require` 加载模块，启动时自动注册全局表 `hf`。
 
 ```
 Usage: HFLinkCLI [options] [-c <chunk>] [<file> ...]
