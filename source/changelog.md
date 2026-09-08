@@ -2,6 +2,13 @@
 
 记录 HFLinkSDK 及其配套工具（HFLinkCLI、HFLink_Flash 等图形界面工具）面向用户的功能与行为变化。文档随软件版本发布同步更新。
 
+## 2026-09-08：Lua 脚本 Buffer、hexdump 与 HSS 视图
+
+- 新增 `hf.util` 工具模块：Buffer 字节缓冲、大端/小端 8–64 位整数与 float/double 编解码（带 offset 参数）、`hexdump` 十六进制转储（左侧地址、一行 16 字节、支持 8/16/32 位宽打印），以及 `time` / `sleep_ms` 等时间与延时 API（安全模式即可使用）。
+- `target:read_memory` 返回值由二进制 string 改为 Buffer，可直接按 `buf:le_u32(0)` 等方式解码；`write_memory` 同时接受 Buffer 与 string。
+- `hf.hss` 的 `read()` 改为返回 SampleView 视图数组（`v:ts()` / `v:block(i)` / `v:u32(i)`），零拷贝按块解码，会话销毁后视图仍可读取已采数据。
+- 表达式引擎 `set_reader` 回调的返回值兼容 Buffer 与 string 两种形态。
+
 ## 2026-09-08：Flash 下载进度显示与阶段统计
 
 - `flash` 在线命令新增逐阶段进度条与完成后的汇总行，实时显示擦除、编程、校验的进度与速度。

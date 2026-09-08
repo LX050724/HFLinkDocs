@@ -280,14 +280,15 @@ Target 由 `context:target(...)` 或 `device:pack_target(Pname, Punit)` 获取�
 | `assert_reset()` / `deassert_reset()` | — | 结果码或错误三元组 | 置位 / 释放复位 |
 | `read_reg(number)` | 0..2³²−1 | integer 或错误三元组 | 读取寄存器 |
 | `write_reg(number, value)` | 均限 2³²−1 | 结果码或错误三元组 | 写入寄存器 |
-| `read_memory(address, len)` | `len` ≥ 1 字节 | string 或错误三元组 | 按字节读内存，返回二进制安全的 Lua string |
-| `write_memory(address, data)` | `data` 为二进制 string | 结果码或错误三元组 | 按字节写内存 |
+| `read_memory(address, len)` | `len` ≥ 1 字节 | Buffer 或错误三元组 | 按字节读内存，返回 `hf.util` Buffer（见 `hf.util.*`） |
+| `write_memory(address, data)` | `data` 为 Buffer 或二进制 string | 结果码或错误三元组 | 按字节写内存 |
 | `destroy()` | — | `true` | 销毁目标 |
 
 ```lua
-local data = target:read_memory(0x20000000, 16)
-for index = 1, #data do
-    io.write(string.format("%02X ", data:byte(index)))
+local buf = target:read_memory(0x20000000, 16)
+print(string.format("word@0 = 0x%08X", buf:le_u32(0)))   -- 小端 32 位解码（offset 0 基）
+for index = 0, #buf - 1 do
+    io.write(string.format("%02X ", buf:byte(index)))
 end
 -- 二进制数据可包含 \0，长度以 # 为准
 ```
@@ -455,7 +456,7 @@ sess:close()                            -- 显式关闭；也可交给 __gc
 sess:attach(context)
 
 -- 方式二：Lua 回调后端（离线测试 / RTOS 插件读任务私有栈）
--- fn(addr, size) 返回正好 size 字节的 Lua string，失败返回 nil
+-- fn(addr, size) 返回正好 size 字节的 Lua string 或 Buffer（read_memory 的返回类型），失败返回 nil
 sess:set_reader(function(addr, size)
     return read_task_memory(addr, size)
 end)
@@ -506,22 +507,87 @@ s:start(1000)                        -- 采样周期 1000 µs（≈ 1 kHz）
 | `s:add_block(addr, size)` | `addr` ≥ 0，`size` > 0 | `true` 或错误三元组 | 添加采样块（总数不超过 `caps` 的 `max_blocks`） |
 | `s:start(period_us)` | 周期微秒，≥ 1 | `true` 或错误三元组 | 启动采样（需先 `add_block`）；周期为尽力满足，实际受 SWD 速度与块布局限制 |
 | `s:stop()` | — | `true` 或错误三元组 | 停止采样 |
-| `s:read(n?)` | 帧数，默认 64，1..4096 | 帧数组或错误三元组 | 读取样本帧 |
+| `s:read(n?)` | 帧数，默认 64，1..4096 | SampleView 数组或错误三元组 | 读取样本帧（View 机制，见下） |
 | `s:stats()` | — | 统计表（见下） | 采样统计 |
 | `s:set_paused(paused)` | boolean | `true` 或错误三元组 | 暂停 / 恢复采样 |
 
-`read()` 返回帧数组，每帧为 `{ts = 纳秒, blocks = {v0, v1, ...}}`；块值 ≤ 8 字节按小端
-解码为无符号整数（超出 Lua 整数范围时为十六进制字符串），超过 8 字节返回二进制字符串。
+`read()` 返回 SampleView 数组，与 C API 的 `ReadSamples` + `LayoutGet*` 同款 View 机制：
+一次读取拷入共享 Buffer，后续按块解码均为零拷贝视图。View 携带布局快照，
+**不依赖 session 存活**（session 销毁后仍可解码已读出的帧）：
+
+| 方法 | 返回 | 说明 |
+|---|---|---|
+| `v:ts()` | integer | 相对 Start 的纳秒时间戳（首帧为 0） |
+| `v:size()` | integer | 帧字节数（= 各块 size 之和） |
+| `v:num_blocks()` | integer | 块数 |
+| `v:frame()` | Buffer | 整帧视图（零拷贝只读，块按 Start 顺序紧凑拼接） |
+| `v:block(i)` | Buffer | 第 i 块视图（1 基，零拷贝只读） |
+| `v:u32(i)` / `v:u64(i)` | integer | 块按小端取值：短块高位补零，超长截断 |
 
 `stats()` 返回：`{total_samples, dropped_samples, dropped_batches, mean_period_ns, paused,
 halted, ts_from_probe, delay_mode}`。
 
 ```lua
-local frames = s:read(64)
-for _, frame in ipairs(frames) do
-    print(frame.ts, frame.blocks[1])
+local views = s:read(64)
+for _, v in ipairs(views) do
+    print(v:ts(), v:u32(1))     -- 时间戳 + 块 1 的 32 位值
 end
 ```
+
+### `hf.util.*`（工具模块）
+
+Buffer 字节缓冲、大端/小端编解码与系统时间/延时。SAFE 模式即可使用。
+
+**Buffer 类型**：`hf.util.buffer(n | string | buffer)` 创建（整数 n 为零填充尺寸，
+string/buffer 为拷贝内容）。`read_memory` 的返回值即此类型：
+
+| 方法 | 说明 |
+|---|---|
+| `buf:size()` / `#buf` | 字节数 |
+| `buf:byte(off)` | 读单字节（offset 0 基） |
+| `buf:tostring()` | 转二进制 Lua string |
+| `buf:hexdump(base?, width?)` | 十六进制转储：左侧地址（默认 0），一行 16 字节 + ASCII 列；`width` 位宽 8/16/32（默认 8），16/32 位按小端组装、尾部不足整字高位补零；返回 string，行间 `\n`、末行不带，`print` 一次输出 |
+| `buf == other` | 内容比较 |
+| `buf:sub(off, len?)` | 零拷贝只读视图（len 默认到末尾） |
+| `buf:copy()` | 独立可写副本 |
+| `buf:resize(n)` | 变更长度（增长部分零填充） |
+| `buf:append_string(s)` / `buf:append_buffer(b)` | 追加数据 |
+
+**大小端编解码**：读法 18 种——`u8` / `i8` 与 `{le,be}_` × `{u16,u32,u64,i16,i32,i64,f32,f64}`，
+Buffer 方法与模块函数双入口；写法对称（`set_le_u32(off, v)` …，16 位以上带 `le_`/`be_` 前缀）：
+
+```lua
+local buf = target:read_memory(0x20000000, 8)
+buf:le_u32(0)                    -- Buffer 方法
+hf.util.le_u32(buf, 0)           -- 模块函数（首参也接受 string，可直解 RTT 读数）
+hf.util.be_f64(buf, 0)           -- 大端 double
+local w = hf.util.buffer(4)
+w:set_be_u32(0, 0x12345678)
+```
+
+offset 为 **0 基**字节偏移（可省略，默认 0），越界抛 Lua 错误；u64 ≥ 2^63 以负 integer
+位型呈现；编码时负数按补码截断。
+
+`hexdump` 亦有模块函数形态：`hf.util.hexdump(data, base?, width?)`（`data` 接受 Buffer 或 string）：
+
+```lua
+local m = target:read_memory(0x20000000, 16)
+print(m:hexdump(0x20000000))       -- 字节：0x20000000  00 20 00 20 ...
+print(m:hexdump(0x20000000, 32))   -- 32 位字：0x20000000  20002000 ...
+```
+
+**系统时间与延时**：
+
+| 函数 | 返回 | 说明 |
+|---|---|---|
+| `hf.util.time()` | integer | epoch 秒（与 `os.time` 一致，SAFE 可用） |
+| `hf.util.time_ms()` | integer | epoch 毫秒 |
+| `hf.util.mono_us()` | integer | 宿主单调时钟微秒（与 `context:time_us()` 同源） |
+| `hf.util.sleep_ms(ms)` | `true` | 宿主睡眠毫秒（不占调试总线） |
+| `hf.util.sleep_us(us)` | `true` | 宿主睡眠微秒（上限 60 秒） |
+| `hf.util.date(fmt?)` | string | 本地时区格式化（默认 `"%Y-%m-%d %H:%M:%S"`） |
+
+宿主侧等待用 `sleep_*`；目标侧节流（DAP delay）用 `context:delay(us)`。
 
 ## 完整示例
 

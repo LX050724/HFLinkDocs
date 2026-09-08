@@ -136,16 +136,16 @@ check(session:start(1000))                   -- 采样周期 1000 µs ≈ 1 kHz
 
 local frames = {}
 while #frames < 2000 do                      -- 采 2000 帧（约 2 秒）
-    local batch = check(session:read(64))
-    for _, frame in ipairs(batch) do
-        frames[#frames + 1] = frame
+    local batch = check(session:read(64))    -- SampleView 数组（零拷贝视图）
+    for _, view in ipairs(batch) do
+        frames[#frames + 1] = view
     end
 end
 check(session:stop())
 
 print("ts_ns,counter")
-for _, frame in ipairs(frames) do
-    print(string.format("%d,%d", frame.ts, frame.blocks[1]))
+for _, view in ipairs(frames) do
+    print(string.format("%d,%d", view:ts(), view:u32(1)))
 end
 
 device:disconnect()
@@ -187,7 +187,7 @@ check(target:halt())                         -- 停机读内存，避免读到�
 -- 表达式引擎：按 GDB 语法直接读 C 全局变量，类型信息来自 ELF
 local sess = check(hf.expr.open("app.elf"))
 sess:set_reader(function(addr, size)
-    return target:read_memory(addr, size)    -- 失败返回 nil 即视为读取失败
+    return target:read_memory(addr, size)    -- 返回 Buffer（string 亦可）；失败返回 nil 即视为读取失败
 end)
 
 local version = check(sess:eval("g_fw.buildVersion"))
@@ -239,12 +239,10 @@ for number = 13, 15 do
 end
 
 local sp = check(target:read_reg(13))
-local stack = check(target:read_memory(sp, 128))
+local stack = check(target:read_memory(sp, 128))  -- Buffer，解码一步到位
 print("栈顶 128 字节：")
-for i = 0, #stack - 1, 4 do
-    local word = stack:byte(i + 1) | (stack:byte(i + 2) << 8)
-    word = word | (stack:byte(i + 3) << 16) | (stack:byte(i + 4) << 24)
-    print(string.format("0x%08X: 0x%08X", sp + i, word))
+for i = 0, #stack - 4, 4 do
+    print(string.format("0x%08X: 0x%08X", sp + i, stack:le_u32(i)))
 end
 
 device:disconnect()
