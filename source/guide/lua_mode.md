@@ -280,8 +280,8 @@ Target 由 `context:target(...)` 或 `device:pack_target(Pname, Punit)` 获取�
 | `assert_reset()` / `deassert_reset()` | — | 结果码或错误三元组 | 置位 / 释放复位 |
 | `read_reg(number)` | 0..2³²−1 | integer 或错误三元组 | 读取寄存器 |
 | `write_reg(number, value)` | 均限 2³²−1 | 结果码或错误三元组 | 写入寄存器 |
-| `read_memory(address, len)` | `len` ≥ 1 字节 | Buffer 或错误三元组 | 按字节读内存，返回 `hf.util` Buffer（见 `hf.util.*`） |
-| `write_memory(address, data)` | `data` 为 Buffer 或二进制 string | 结果码或错误三元组 | 按字节写内存 |
+| `read_memory(address, len, width?)` | `len` ≥ 1 字节；`width` 可选 1/2/4（默认 1） | Buffer 或错误三元组 | 读内存，返回 `hf.util` Buffer（见 `hf.util.*`）；指定位宽时地址与 `len` 须为位宽的整数倍，更宽位宽传输更快 |
+| `write_memory(address, data, width?)` | `data` 为 Buffer 或二进制 string；`width` 同上 | 结果码或错误三元组 | 写内存，对齐要求同上 |
 | `destroy()` | — | `true` | 销毁目标 |
 
 ```lua
@@ -424,16 +424,18 @@ rtt:stop()
 处理函数接收一个 Request 对象（userdata）：
 
 - 字段：`req.opcode`（integer）、`req.argument`（integer，超 Lua 整数范围时为
-  `"0x%016X"` 字符串）。
-- 方法：`read_u32(index)` / `write_u32(index, value)`、`read_memory(address, size)`（返回
-  二进制 string）/ `write_memory(address, data)`、`set_result(value)`、`set_errno(value)`。
+  `"0x%016X"` 字符串）、`req.target`（借用的 Target 对象，仅在回调同步执行期间有效，
+  不可用时为 nil）。
+- 方法：`read_u32(index)` / `write_u32(index, value)`、`set_result(value)`、`set_errno(value)`。
+- 读写目标内存请经 `req.target:read_memory(...)` / `req.target:write_memory(...)`（用法见上文
+  target 方法表）。
 - 处理函数须返回字符串：`"handled"` 表示已处理，`"fallback"` 表示交给默认处理；其他返回
   值视为错误（`errno = EINVAL`）。
 
 ```lua
 hf.semihosting.register_handler(0x01, function(req)
     local arg = req.argument           -- 参数字段
-    local data = req:read_memory(arg, 16)
+    local data = req.target:read_memory(arg, 16)   -- 经借用目标读内存，返回 Buffer
     req:set_result(#data)
     return "handled"
 end)

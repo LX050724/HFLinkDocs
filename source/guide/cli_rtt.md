@@ -5,7 +5,7 @@ Usage: HFLinkCLI rtt [options]
 ```
 
 建立 RTT 会话守护进程。**默认静默守护**：不在 API 侧消费主机缓冲、不写 stdout，全部数据以
-telnet 收割全速（约 2.7 MB/s，零丢失）供给 telnet 客户端；`--terminal` 开启本地交互终端。
+telnet 收割全速（60 MHz SWD 下实测约 3.4 MB/s，零丢失）供给 telnet 客户端；`--terminal` 开启本地交互终端。
 
 ```text
 Example:

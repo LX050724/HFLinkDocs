@@ -2,6 +2,23 @@
 
 记录 HFLinkSDK 及其配套工具（HFLinkCLI、HFLink_Flash 等图形界面工具）面向用户的功能与行为变化。文档随软件版本发布同步更新。
 
+## 2026-09-10：Lua 内存访问位宽与半主机请求调整
+
+- `target:read_memory` / `target:write_memory` 新增可选位宽参数 `width`（1/2/4 字节，默认 1），指定位宽可提升访问速度，地址与长度须按位宽对齐。
+- 半主机请求对象不再提供 `read_memory` / `write_memory` 方法，请改用 `req.target` 取得目标后调用其 `read_memory` / `write_memory`。
+- C 接口同步移除半主机请求的 `ReadMemory` / `WriteMemory`，新增 `GetTarget`。
+
+## 2026-09-10：命令行工具退出行为修正
+
+- `rtt` 守护模式支持 `Ctrl+C`（SIGINT/SIGTERM）优雅退出，退出时完整清理会话并正确释放探针。
+- 修复 `gdbserver` 退出时因清理顺序错误导致设备关闭失败的问题。
+
+## 2026-09-09：Flash 下载与 RTT 提速
+
+- Flash 编程速度大幅提升：实机 STM32H723 烧录 1 MB 镜像（SWD 10 MHz、`--force-prog`）实测编程速度约 195 KB/s，编程耗时由 26.9 s 降至 5.3 s（约 1/5）。
+- Flash 校验与预扫描回读提速约 4 倍：同条件实测回读速度约 775 KB/s（5.2 s 降至 1.3 s），整镜像下载总耗时由 36.8 s 缩短至 11.2 s。
+- RTT 收割吞吐提升 16.2%：实机 STM32H723、SWD 60 MHz、telnet 端到端实测由 2.91 MB/s 升至 3.38 MB/s，吞吐随 SWD 时钟近似线性提升。
+
 ## 2026-09-08：Lua 脚本 Buffer、hexdump 与 HSS 视图
 
 - 新增 `hf.util` 工具模块：Buffer 字节缓冲、大端/小端 8–64 位整数与 float/double 编解码（带 offset 参数）、`hexdump` 十六进制转储（左侧地址、一行 16 字节、支持 8/16/32 位宽打印），以及 `time` / `sleep_ms` 等时间与延时 API（安全模式即可使用）。
